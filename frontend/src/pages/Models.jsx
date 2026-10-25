@@ -11,11 +11,22 @@ const Models = () => {
   // Securely pull the API URL from environment variables
   const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
+  // Helper function to build headers
+  const getAuthHeaders = () => {
+    const token = sessionStorage.getItem('soc_session_token');
+    const tenantKey = sessionStorage.getItem('soc_tenant_key');
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (tenantKey) headers['X-Tenant-Key'] = tenantKey;
+    return headers;
+  };
+
   const fetchMetrics = async () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await axios.get(`${API_URL}/model/metrics`);
+      const headers = getAuthHeaders();
+      const res = await axios.get(`${API_URL}/model/metrics`, { headers });
       setData(res.data);
     } catch (err) {
       console.error("Failed to load model metrics:", err);

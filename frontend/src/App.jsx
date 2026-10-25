@@ -14,6 +14,7 @@ import {
   RotateCcw,
   BookOpen
 } from 'lucide-react';
+import axios from 'axios';
 
 import Overview from './pages/Overview';
 import Alerts from './pages/Alerts';
@@ -27,6 +28,7 @@ import Tour from './components/Tour';
 import { isSetupComplete } from './utils/setupState';
 
 const BACKEND_HOST = 'ai-cyber-threat-backend-k0pz.onrender.com';
+const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
 // Tour "already seen" flag is stored per user so each new account gets the walkthrough once.
 const getTourKey = () => `soc_tour_seen:${sessionStorage.getItem('soc_user_email') || 'anonymous'}`;
@@ -178,19 +180,41 @@ function App() {
     return () => { if (socket) socket.close(); };
   }, [isAuthenticated, streamKey, showToast]);
 
-  // "Reset Statistics": simulates restarting the data stream (reconnects the socket and tells pages to refetch)
-  const handleResetStatistics = useCallback(() => {
+  // "Reset Statistics": Uses the new secure backend endpoint instead of just clearing the local state
+  const handleResetStatistics = useCallback(async () => {
     if (isResetting) return;
-    setIsResetting(true);
-    showToast('Restarting data stream...', 'info', 4000);
-    setStreamKey((k) => k + 1);
-    window.dispatchEvent(new CustomEvent('soc-stats-reset'));
+    
+    const confirmDelete = window.confirm(
+      "Are you sure you want to reset the statistics? This will permanently delete all logs and threats for your account."
+    );
+    if (!confirmDelete) return;
 
-    resetTimer.current = setTimeout(() => {
+    setIsResetting(true);
+    showToast('Clearing backend threat logs...', 'info', 4000);
+
+    try {
+      const token = sessionStorage.getItem('soc_session_token');
+      const tenantKey = sessionStorage.getItem('soc_tenant_key');
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (tenantKey) headers['X-Tenant-Key'] = tenantKey;
+
+      // Hit the backend endpoint to delete the data
+      await axios.post(`${API_URL}/statistics/reset`, {}, { headers });
+      
+      // Tell all the other components on the page to fetch the newly empty data
+      setStreamKey((k) => k + 1);
+      window.dispatchEvent(new CustomEvent('soc-stats-reset'));
       window.dispatchEvent(new CustomEvent('soc-threat-created'));
-      showToast('Statistics reset. Data stream restarted.', 'info', 3500);
+      window.dispatchEvent(new CustomEvent('soc-settings-updated'));
+      
+      showToast('Statistics reset successfully.', 'info', 3500);
+    } catch (error) {
+      console.error("Failed to reset stats:", error);
+      showToast('Failed to reset statistics on the server.', 'alert', 3500);
+    } finally {
       setIsResetting(false);
-    }, 1200);
+    }
   }, [isResetting, showToast]);
 
   const navItems = [

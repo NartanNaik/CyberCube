@@ -28,6 +28,16 @@ const Alerts = ({ showOnlyAttacks = false }) => {
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
+  // Helper function to build headers
+  const getAuthHeaders = () => {
+    const token = sessionStorage.getItem('soc_session_token');
+    const tenantKey = sessionStorage.getItem('soc_tenant_key');
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (tenantKey) headers['X-Tenant-Key'] = tenantKey;
+    return headers;
+  };
+
   // Debounce search input by 300ms
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -52,7 +62,9 @@ const Alerts = ({ showOnlyAttacks = false }) => {
       if (debouncedSearch) params.search = debouncedSearch;
       if (showOnlyAttacks) params.exclude_normal = true;
       
-      const res = await axios.get(`${API_URL}/threats`, { params });
+      const headers = getAuthHeaders();
+      const res = await axios.get(`${API_URL}/threats`, { params, headers });
+      
       if (res.data && res.data.items) {
         setThreats(res.data.items);
         setTotal(res.data.total);
