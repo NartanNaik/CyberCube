@@ -29,13 +29,24 @@ const ThreatDetailModal = ({ threat, onClose, onUpdateStatus }) => {
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
+  // Helper function to build headers
+  const getAuthHeaders = () => {
+    const token = sessionStorage.getItem('soc_session_token');
+    const tenantKey = sessionStorage.getItem('soc_tenant_key');
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (tenantKey) headers['X-Tenant-Key'] = tenantKey;
+    return headers;
+  };
+
   const handleStatusChange = async (newStatus) => {
     setUpdating(true);
     setStatus(newStatus);
     try {
+      const headers = getAuthHeaders();
       const res = await axios.patch(`${API_URL}/threats/${threat.id}`, {
         status: newStatus
-      });
+      }, { headers });
       onUpdateStatus(threat.id, res.data);
     } catch (err) {
       console.error("Failed to update status:", err);
@@ -49,7 +60,8 @@ const ThreatDetailModal = ({ threat, onClose, onUpdateStatus }) => {
   const handleBlockIP = async (enforceOs = false) => {
     setUpdating(true);
     try {
-      const res = await axios.post(`${API_URL}/threats/${threat.id}/block?enforce_os=${enforceOs}`);
+      const headers = getAuthHeaders();
+      const res = await axios.post(`${API_URL}/threats/${threat.id}/block?enforce_os=${enforceOs}`, {}, { headers });
       setIsBlocked(true);
       setStatus("resolved");
       onUpdateStatus(threat.id, res.data);
@@ -68,7 +80,8 @@ const ThreatDetailModal = ({ threat, onClose, onUpdateStatus }) => {
     }
     setLoadingXai(true);
     try {
-      const res = await axios.get(`${API_URL}/threats/${threat.id}/xai`);
+      const headers = getAuthHeaders();
+      const res = await axios.get(`${API_URL}/threats/${threat.id}/xai`, { headers });
       setXaiData(res.data);
       setShowXai(true);
     } catch (err) {
@@ -86,7 +99,8 @@ const ThreatDetailModal = ({ threat, onClose, onUpdateStatus }) => {
     }
     setLoadingRules(true);
     try {
-      const res = await axios.get(`${API_URL}/threats/${threat.id}/rules`);
+      const headers = getAuthHeaders();
+      const res = await axios.get(`${API_URL}/threats/${threat.id}/rules`, { headers });
       setRules(res.data);
       setShowRules(true);
     } catch (err) {
@@ -100,8 +114,10 @@ const ThreatDetailModal = ({ threat, onClose, onUpdateStatus }) => {
   const handleDownloadPdf = async () => {
     setDownloadingPdf(true);
     try {
+      const headers = getAuthHeaders();
       const res = await axios.get(`${API_URL}/threats/${threat.id}/report/pdf`, {
-        responseType: 'blob'
+        responseType: 'blob',
+        headers
       });
       const blob = new Blob([res.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
@@ -389,7 +405,8 @@ const ThreatDetailModal = ({ threat, onClose, onUpdateStatus }) => {
                   onClick={async () => {
                     setExplaining(true);
                     try {
-                      const res = await axios.post(`${API_URL}/threats/${threat.id}/explain`);
+                      const headers = getAuthHeaders();
+                      const res = await axios.post(`${API_URL}/threats/${threat.id}/explain`, {}, { headers });
                       setExplanation(res.data.ai_explanation);
                       onUpdateStatus(threat.id, res.data);
                     } catch (err) {

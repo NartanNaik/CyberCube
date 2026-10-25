@@ -14,6 +14,16 @@ const PcapUploadModal = ({ isOpen, onClose, onPcapProcessed }) => {
 
   if (!isOpen) return null;
 
+  // Helper function to build headers
+  const getAuthHeaders = () => {
+    const token = sessionStorage.getItem('soc_session_token');
+    const tenantKey = sessionStorage.getItem('soc_tenant_key');
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (tenantKey) headers['X-Tenant-Key'] = tenantKey;
+    return headers;
+  };
+
   const handleDrag = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -51,15 +61,17 @@ const PcapUploadModal = ({ isOpen, onClose, onPcapProcessed }) => {
     setResults(null);
 
     try {
+      const headers = getAuthHeaders();
       let res;
+      
       if (useDemo || !file) {
-        res = await axios.post(`${API_URL}/pcap/upload?demo=true`);
+        res = await axios.post(`${API_URL}/pcap/upload?demo=true`, {}, { headers });
       } else {
         const formData = new FormData();
         formData.append('file', file);
-        res = await axios.post(`${API_URL}/pcap/upload`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
+        // Add content type to the headers object
+        headers['Content-Type'] = 'multipart/form-data';
+        res = await axios.post(`${API_URL}/pcap/upload`, formData, { headers });
       }
 
       setResults(res.data);
