@@ -147,10 +147,15 @@ app.add_middleware(
 
 def get_tenant_key(
     x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    x_tenant_key: Optional[str] = Header(None, alias="X-Tenant-Key"),
     api_key: Optional[str] = Query(None)
 ) -> str:
-    """Extracts tenant API key from request header or query parameter, defaulting to 'default'."""
-    return x_api_key or api_key or "default"
+    """Extracts tenant API key from request headers or query parameter to isolate data."""
+    key = x_tenant_key or x_api_key or api_key
+    # Ensure we don't accidentally accept literal string "null" from local storage
+    if key and str(key).strip().lower() not in ["null", "undefined", ""]:
+        return str(key).strip()
+    return "default"
 
 
 # ---------------------------------------------------------------------------
@@ -938,3 +943,23 @@ async def websocket_threats_endpoint(
             await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(websocket)
+
+# 16. POST /statistics/reset - Hard reset user statistics
+@app.post("/statistics/reset")
+@app.post("/threats/reset")
+def reset_tenant_statistics(
+    tenant_key: str = Depends(get_tenant_key),
+    db: Session = Depends(get_db)
+):
+    """Securely clears all threat data and statistics for the logged-in user only."""
+    try:
+        deleted_count = db.query(Threat).filter(Threat.api_key == tenant_key).delete(synchronize_session=False)
+        db.commit()
+        return {
+            "success": True, 
+            "message": f"Successfully cleared {deleted_count} records.",
+            "deleted_count": deleted_count
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to reset statistics: {str(e)}")

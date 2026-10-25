@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Sliders, Shield, Save, ShieldAlert } from 'lucide-react';
+import axios from 'axios';
+import { Settings as SettingsIcon, Sliders, Shield, Save, ShieldAlert, Trash2 } from 'lucide-react';
 
 const Settings = () => {
   // Existing Local Storage Settings
@@ -17,20 +18,34 @@ const Settings = () => {
   // New IPS Auto-Containment Settings
   const [ipsActive, setIpsActive] = useState(false);
   const [ipsLoading, setIpsLoading] = useState(true);
+  
+  // State for hard reset functionality
+  const [resetting, setResetting] = useState(false);
+  const [resetMessage, setResetMessage] = useState(null);
+
+  // Helper function to build headers for API calls
+  const getAuthHeaders = () => {
+    const token = sessionStorage.getItem('soc_session_token');
+    const tenantKey = sessionStorage.getItem('soc_tenant_key');
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (tenantKey) headers['X-Tenant-Key'] = tenantKey;
+    return headers;
+  };
 
   // Fetch initial IPS state from the FastAPI backend when the page loads
   useEffect(() => {
-    fetch('https://ai-cyber-threat-backend-k0pz.onrender.com/config/ips')
-      .then(res => res.json())
-      .then(data => {
-        setIpsActive(data.ips_mode_active);
+    const headers = getAuthHeaders();
+    axios.get(`${apiUrl}/config/ips`, { headers })
+      .then(res => {
+        setIpsActive(res.data.ips_mode_active);
         setIpsLoading(false);
       })
       .catch(err => {
         console.error("Failed to fetch IPS settings", err);
         setIpsLoading(false);
       });
-  }, []);
+  }, [apiUrl]);
 
   // Handle saving the local UI settings (threshold, polling, api)
   const handleSave = (e) => {
@@ -51,14 +66,41 @@ const Settings = () => {
     setIpsLoading(true);
     const newState = !ipsActive;
     try {
-      await fetch(`https://ai-cyber-threat-backend-k0pz.onrender.com/config/ips?active=${newState}`, {
-        method: 'POST'
-      });
+      const headers = getAuthHeaders();
+      await axios.post(`${apiUrl}/config/ips?active=${newState}`, {}, { headers });
       setIpsActive(newState);
     } catch (error) {
       console.error("Error updating IPS settings", error);
     } finally {
       setIpsLoading(false);
+    }
+  };
+
+  // Handle completely resetting the tenant's statistics and data
+  const handleResetData = async () => {
+    const confirmDelete = window.confirm(
+      "WARNING: This will permanently delete all your generated network logs, PCAP analysis results, and threat statistics. Are you absolutely sure?"
+    );
+    
+    if (!confirmDelete) return;
+
+    setResetting(true);
+    setResetMessage(null);
+
+    try {
+      const headers = getAuthHeaders();
+      const res = await axios.post(`${apiUrl}/statistics/reset`, {}, { headers });
+      setResetMessage({ type: 'success', text: res.data.message || 'All statistics have been cleared.' });
+      
+      // Trigger a dashboard refresh
+      window.dispatchEvent(new Event('soc-settings-updated'));
+    } catch (error) {
+      console.error("Failed to reset statistics", error);
+      setResetMessage({ type: 'error', text: 'Failed to reset statistics. Please check your connection.' });
+    } finally {
+      setResetting(false);
+      // Clear message after 4 seconds
+      setTimeout(() => setResetMessage(null), 4000);
     }
   };
 
@@ -175,8 +217,41 @@ const Settings = () => {
               <span>{saved ? "Settings Applied!" : "Save Dashboard Modifications"}</span>
             </button>
           </div>
-
         </form>
+      </div>
+
+      {/* DATA MANAGEMENT (HARD RESET) BLOCK */}
+      <div className="glass-panel p-6 bg-rose-950/20 border border-rose-900/30 rounded-xl">
+        <div className="mb-4 border-b border-rose-900/30 pb-3">
+          <h3 className="text-sm font-semibold text-rose-400 flex items-center gap-2">
+            <Trash2 className="w-4 h-4" />
+            Danger Zone
+          </h3>
+          <p className="text-[11px] text-slate-400 mt-1">Permanently wipe all network telemetry data and analysis statistics for your account.</p>
+        </div>
+        
+        <div className="flex flex-col gap-3">
+          <button
+            onClick={handleResetData}
+            disabled={resetting}
+            className="w-full bg-rose-900/60 hover:bg-rose-800 text-rose-100 px-4 py-3 rounded-lg text-xs font-bold transition-all border border-rose-700/50 shadow-sm flex justify-center items-center gap-2"
+          >
+            {resetting ? (
+              <span className="flex items-center gap-2">
+                <span className="animate-spin w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full"></span>
+                Wiping Data...
+              </span>
+            ) : (
+              "Hard Reset Account Statistics"
+            )}
+          </button>
+          
+          {resetMessage && (
+            <div className={`text-[11px] p-2 rounded text-center font-medium ${resetMessage.type === 'success' ? 'bg-emerald-900/50 text-emerald-400' : 'bg-rose-900/50 text-rose-400'}`}>
+              {resetMessage.text}
+            </div>
+          )}
+        </div>
       </div>
 
     </div>

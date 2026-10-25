@@ -21,15 +21,27 @@ const Overview = () => {
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
+  // Helper function to build headers
+  const getAuthHeaders = () => {
+    const token = sessionStorage.getItem('soc_session_token');
+    const tenantKey = sessionStorage.getItem('soc_tenant_key');
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (tenantKey) headers['X-Tenant-Key'] = tenantKey;
+    return headers;
+  };
+
   const fetchData = async () => {
     try {
       setLoading(true);
       setError(null);
       
+      const headers = getAuthHeaders();
+      
       const [summaryRes, distRes, threatsRes] = await Promise.all([
-        axios.get(`${API_URL}/threats/summary`),
-        axios.get(`${API_URL}/threats/distribution`),
-        axios.get(`${API_URL}/threats?limit=8`)
+        axios.get(`${API_URL}/threats/summary`, { headers }),
+        axios.get(`${API_URL}/threats/distribution`, { headers }),
+        axios.get(`${API_URL}/threats?limit=8`, { headers })
       ]);
       
       setSummary(summaryRes.data);
@@ -54,10 +66,11 @@ const Overview = () => {
 
     let timer = setInterval(() => {
       // Quiet background refresh without flashing full loader
+      const headers = getAuthHeaders();
       Promise.all([
-        axios.get(`${API_URL}/threats/summary`),
-        axios.get(`${API_URL}/threats/distribution`),
-        axios.get(`${API_URL}/threats?limit=8`)
+        axios.get(`${API_URL}/threats/summary`, { headers }),
+        axios.get(`${API_URL}/threats/distribution`, { headers }),
+        axios.get(`${API_URL}/threats?limit=8`, { headers })
       ]).then(([summaryRes, distRes, threatsRes]) => {
         setSummary(summaryRes.data);
         setDistribution(distRes.data);
@@ -68,10 +81,11 @@ const Overview = () => {
     const handleSettingsUpdated = () => {
       clearInterval(timer);
       timer = setInterval(() => {
+        const headers = getAuthHeaders();
         Promise.all([
-          axios.get(`${API_URL}/threats/summary`),
-          axios.get(`${API_URL}/threats/distribution`),
-          axios.get(`${API_URL}/threats?limit=8`)
+          axios.get(`${API_URL}/threats/summary`, { headers }),
+          axios.get(`${API_URL}/threats/distribution`, { headers }),
+          axios.get(`${API_URL}/threats?limit=8`, { headers })
         ]).then(([summaryRes, distRes, threatsRes]) => {
           setSummary(summaryRes.data);
           setDistribution(distRes.data);
@@ -93,7 +107,8 @@ const Overview = () => {
     setRecentThreats(prev => prev.map(t => t.id === id ? updatedThreat : t));
     
     // Refresh stats summary
-    axios.get(`${API_URL}/threats/summary`).then(res => setSummary(res.data)).catch(console.error);
+    const headers = getAuthHeaders();
+    axios.get(`${API_URL}/threats/summary`, { headers }).then(res => setSummary(res.data)).catch(console.error);
     
     // Close modal
     setSelectedThreat(null);
