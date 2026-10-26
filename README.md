@@ -1,166 +1,190 @@
-# AI Cyber Threat Detection Platform (SOC Console)
-### Final Year Major Project — Enterprise Security Operations Center & Network Telemetry Engine
+<p align="center">
+  <img src="banner.svg" alt="CyberCube banner" width="100%">
+</p>
 
-A full-stack Security Operations Center (SOC) dashboard that monitors real-time and captured network flow telemetry, classifies threats using machine learning trained on the **CIC-IDS2017** benchmark, explains alerts via **Explainable AI (SHAP)** and **Google Gemini Generative AI**, supports **Drag-and-Drop PCAP Ingestion**, provides **1-Click PDF Incident Forensic Reporting**, maps adversaries to the **MITRE ATT&CK** framework, executes **Active Host Firewall Containment**, and streams live alerts via **WebSockets**.
+<p align="center">
+  <a href="https://ai-powered-cyber-threat-detection-soc.onrender.com/"><b>Live Demo</b></a>
+  &nbsp;|&nbsp;
+  <a href="#architecture">Architecture</a>
+  &nbsp;|&nbsp;
+  <a href="#model-benchmark">Benchmark</a>
+  &nbsp;|&nbsp;
+  <a href="#quick-start">Quick Start</a>
+</p>
+
+<p align="center">
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white">
+  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white">
+  <img alt="React" src="https://img.shields.io/badge/React-Vite-61DAFB?logo=react&logoColor=black">
+  <img alt="scikit-learn" src="https://img.shields.io/badge/scikit--learn-F7931E?logo=scikitlearn&logoColor=white">
+  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white">
+</p>
+
+# CyberCube: AI-Powered Cyber Threat Detection and SOC Platform
+
+CyberCube is a full-stack Security Operations Center (SOC) console. It ingests network flow telemetry from PCAP uploads or a live interface, classifies each flow with a machine learning model, explains the decision with SHAP, maps it to MITRE ATT&CK, and streams alerts to analysts in real time.
+
+> **Note on data.** The training data is synthesized to follow the CIC-IDS2017 flow schema (12,000 records, 22 features). The reported metrics describe model behaviour on this synthetic set and are not a claim about performance on real-world traffic. Validation on the original CIC-IDS2017 capture is listed under [Roadmap](#roadmap).
 
 ---
 
-## 🚀 Enterprise Feature Highlights
+## Features
 
-*   **Drag-and-Drop PCAP Ingestion**: Upload any `.pcap` capture directly in the web UI. Our zero-dependency binary packet engine parses raw Ethernet/IP/TCP frames via `struct.unpack`, aggregates bidirectional flows, runs ML inference, and logs threats.
-*   **One-Click PDF Forensic Incident Report**: Generate and export formal executive incident reports (`ReportLab` engine) detailing severity ratings, attacker GeoIP, MITRE tags, 22 flow metrics, AI root-cause analysis, and analyst digital audit signatures.
-*   **Explainable AI (XAI) via SHAP**: Integrates `shap.TreeExplainer` directly in the threat investigation modal to visualize the mathematical feature contributions (e.g. forward packet inter-arrival times, flag counts, duration) that led the model to its decision.
-*   **Multi-Model Academic Benchmark**: Compares 4 distinct model architectures on 2,400 unseen test samples:
-    *   **Random Forest** (99.50% Accuracy, 99.37% Macro F1, 16.9 $\mu$s latency) — *Active Deployed*
-    *   **Hist Gradient Boosting** (99.50% Accuracy, 99.37% Macro F1, 30.1 $\mu$s latency)
-    *   **Multi-Layer Perceptron (MLP)** (99.00% Accuracy, 98.73% Macro F1, 2.9 $\mu$s latency)
-    *   **Logistic Regression Baseline** (98.38% Accuracy, 97.90% Macro F1, 0.7 $\mu$s latency)
-*   **Real-Time WebSocket Streaming**: Bi-directional event push stream (`/ws/threats`) that displays live alerts and animated banners across connected analyst consoles with zero latency.
-*   **Active Containment & Rule Export**: One-click attacker IP isolation with optional host OS execution via Windows `netsh advfirewall`, plus ready-to-deploy rule export for Linux `iptables`, Suricata, and Snort.
-*   **Live Hardware Network Sniffer**: Capture live packets directly from the physical machine's network interface (`src/live_sniffer.py`) and stream them into the platform.
-*   **Interactive Global Threat Map**: SVG world map plotting adversary geographic coordinates (Ashburn, Frankfurt, Moscow, Beijing, London, etc.) and streaming vector animations towards the protected data center cluster (`10.0.1.10`).
+| Capability | What it does |
+|---|---|
+| PCAP ingestion | Drag-and-drop `.pcap` upload. A custom parser reads Ethernet, IP and TCP headers with `struct.unpack`, aggregates bidirectional flows, runs inference and stores the result. |
+| Live packet capture | `live_sniffer.py` captures from the host interface. Without admin privileges it falls back to generated probes so the demo keeps running. |
+| Multi-model benchmark | Random Forest, Histogram Gradient Boosting, MLP and Logistic Regression compared on accuracy, macro-F1, inference latency and training time. |
+| Explainable AI | SHAP TreeExplainer waterfall plots in the investigation drawer show which flow features pushed a prediction toward attack or benign. |
+| MITRE ATT&CK mapping | Every classified threat carries a technique ID, for example DDoS to T1498, PortScan to T1046, Brute Force to T1110. |
+| Real-time streaming | WebSocket endpoint `/ws/threats` pushes new alerts to every connected analyst console, scoped by tenant. |
+| PDF incident reports | One-click ReportLab reports with severity, attacker GeoIP, MITRE tags, 22 flow metrics, root-cause text and a signature block. |
+| Active containment | Generates Windows `netsh advfirewall` commands and exports `iptables`, Suricata and Snort rules for the attacker IP. |
+| Generative explanations | Gemini 1.5 Flash writes plain-English root-cause summaries through a backend proxy, with a rule-based fallback when no key is set. |
+| Global threat map | SVG world map plots attacker origins and animates traffic toward the protected cluster. |
+| Multi-tenant access | Google OAuth sign-in, per-user tenant keys derived with HMAC, and 12-hour signed session tokens. |
 
 ---
 
-## 🛠️ Architecture
+## Architecture
 
-```mermaid
-graph TD
-    subgraph Ingestion Layer
-        A[CIC-IDS2017 Dataset Telemetry] -->|data_pipeline.py| C(threats_cleaned.csv)
-        B[Web UI PCAP Upload / .pcap] -->|pcap_analyzer.py| D[Flow Feature Extractor]
-        E[Live Hardware Sniffer] -->|live_sniffer.py| D
-    end
+<p align="center">
+  <img src="architecture.svg" alt="CyberCube system architecture diagram" width="100%">
+</p>
 
-    subgraph Intelligence & Defense Layer
-        C -->|train_model.py| F[Random Forest 99.50%]
-        C -->|train_model.py| G[Benchmark: HGB, MLP, LogReg]
-        D -->|22 Flow Vector| F
-        F -->|Prediction & MITRE Tagging| H[(PostgreSQL / SQLite Database)]
-        I[SHAP TreeExplainer] -->|Local Feature Attribution| J[XAI Service]
-        K[Active Firewall Containment] -->|Windows netsh / iptables| H
-    end
+The platform has four layers:
 
-    subgraph Serving & Visualization
-        H -->|SQLAlchemy ORM| L[FastAPI REST & WebSockets]
-        L -->|JSON REST & WS Stream| M[Vite + React SOC Dashboard]
-        L -->|ReportLab Engine| N[PDF Incident Reports]
-        L -->|x-goog-api-key| O[Google Gemini 1.5 Flash AI]
-        M -->|Investigate, Export & Block| L
-    end
+1. **Ingestion.** PCAP upload, the live sniffer, the synthetic dataset pipeline and a traffic simulator that replays sampled flows as events.
+2. **Intelligence and defense.** Model training and benchmarking, flow inference, SHAP explanations and firewall rule generation.
+3. **Serving and visualization.** A FastAPI backend (REST plus WebSockets) feeding a React SOC dashboard, the PDF report engine and the Gemini proxy.
+4. **Persistence.** SQLAlchemy ORM over PostgreSQL in production, or SQLite for local demos.
+
+---
+
+## Model Benchmark
+
+Evaluated on 2,400 held-out samples from a stratified 80/20 split of the synthesized dataset.
+
+| Model | Accuracy | Macro-F1 | Inference latency | Status |
+|---|---|---|---|---|
+| Random Forest | 99.50% | 99.37% | 16.9 µs | Deployed |
+| Histogram Gradient Boosting | 99.50% | 99.37% | 30.1 µs | Benchmarked |
+| Multi-Layer Perceptron | 99.00% | 98.73% | 2.9 µs | Benchmarked |
+| Logistic Regression | 98.38% | 97.90% | 0.7 µs | Baseline |
+
+Random Forest was deployed for its accuracy and for native compatibility with SHAP TreeExplainer. Full per-class reports, confusion matrices and feature importances are in `ml/metrics.json`.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Backend | Python, FastAPI, SQLAlchemy, WebSockets |
+| ML and XAI | scikit-learn, SHAP |
+| Frontend | React, Vite, Tailwind CSS |
+| Database | PostgreSQL (Neon), SQLite fallback |
+| AI | Google Gemini 1.5 Flash |
+| Reporting | ReportLab |
+| CI and hosting | GitHub Actions (traffic simulation), Render (backend), Vercel (frontend) |
+
+---
+
+## Project Structure
+
+```
+backend/
+  app/
+    main.py            REST endpoints, WebSockets, PCAP ingestion
+    models.py          Threat ORM model (GeoIP, MITRE ID, JSON features)
+    schemas.py         Pydantic request and response schemas
+    config.py          Environment loader
+    database.py        Engine and session factory
+    xai_service.py     SHAP feature attribution
+    ai_service.py      Gemini client with fallback
+    report_service.py  PDF incident report generator
+  scripts/seed.py      Database seeder
+data/
+  threats_cleaned.csv  12,000 synthesized flow records
+  live_sample.pcap     Demo packet capture
+frontend/src/
+  components/          PcapUploadModal, GlobalThreatMap, ThreatDetailModal
+  pages/               Overview, Alerts, Analytics, Models, Settings
+ml/
+  model.pkl            Serialized Random Forest pipeline
+  metrics.json         Benchmark results and class reports
+src/
+  data_pipeline.py     Flow telemetry generator (22 features)
+  train_model.py       Multi-model trainer
+  predict.py           Inference and severity assessment
+  pcap_analyzer.py     Binary PCAP flow parser
+  live_sniffer.py      Live interface sniffer
+  simulate_live_traffic.py
 ```
 
 ---
 
-## 📁 Directory Structure
+## Quick Start
 
-```
-├── backend/
-│   ├── app/
-│   │   ├── config.py           # Configuration & environment loader
-│   │   ├── database.py         # SQLAlchemy engine & session factory
-│   │   ├── main.py             # FastAPI REST endpoints, WebSockets, PCAP ingestion
-│   │   ├── models.py           # Threat ORM model (GeoIP, MITRE, JSON features)
-│   │   ├── schemas.py          # Pydantic validation & response schemas
-│   │   ├── report_service.py   # ReportLab PDF Incident Report Generator
-│   │   ├── xai_service.py      # SHAP TreeExplainer feature attribution service
-│   │   └── ai_service.py       # Google Gemini client with secure headers & fallback
-│   ├── scripts/
-│   │   └── seed.py             # Database seeder (12,000 CIC-IDS2017 records)
-│   └── requirements.txt        # Backend dependencies
-├── data/
-│   ├── threats_cleaned.csv     # 12,000 synthetic CIC-IDS2017 flow telemetry rows
-│   └── live_sample.pcap        # Demonstration raw binary packet capture
-├── frontend/
-│   ├── src/
-│   │   ├── components/         # PcapUploadModal, GlobalThreatMap, ThreatDetailModal, etc.
-│   │   ├── pages/              # Overview, Alerts, Analytics, Models, Settings
-│   │   ├── App.jsx             # Shell, sidebar, and WebSocket live push listener
-│   │   └── main.jsx            # Application entrypoint
-│   └── package.json            # Vite + React dependencies
-├── ml/
-│   ├── model.pkl               # Serialized Random Forest classifier
-│   └── metrics.json            # Multi-model comparative benchmark & class reports
-├── src/
-│   ├── data_pipeline.py        # CIC-IDS2017 flow telemetry generator (22 features)
-│   ├── train_model.py          # Multi-model trainer (RF, HGB, MLP, LogReg)
-│   ├── predict.py              # Flow inference & risk severity assessment
-│   ├── pcap_analyzer.py        # Zero-dependency binary PCAP flow parser
-│   ├── live_sniffer.py         # Live physical interface packet sniffer
-│   └── simulate_live_traffic.py# Live telemetry feed injector
-└── README.md
-```
+**Prerequisites:** Python 3.10+ and Node.js 18+.
 
----
+**1. Configure the environment.** Create `.env` in the project root or in `backend/`:
 
-## ⚙️ Quick Start Guide
-
-### 1. Prerequisites
-- Python 3.10+ (Tested on Python 3.13)
-- Node.js 18+
-
-### 2. Environment Configuration
-Create a `.env` file in the project root or in `backend/.env`:
 ```env
-# Optional: Set PostgreSQL connection or leave empty to use local SQLite (threats.db)
+# Leave as SQLite for local use, or point to PostgreSQL
 DATABASE_URL=sqlite:///./threats.db
 
-# Optional: Add Google Gemini API key for live AI explanation generation
-GEMINI_API_KEY=your_gemini_api_key_here
+# Optional: enables live Gemini explanations
+GEMINI_API_KEY=your_key_here
 ```
 
-### 3. Pipeline Setup (Data & Multi-Model Benchmark)
+**2. Build the data and models.**
+
 ```bash
-# 1. Synthesize CIC-IDS2017 flow dataset (12,000 records)
-python src/data_pipeline.py
-
-# 2. Run multi-model benchmark training (RF, Gradient Boosting, MLP Neural Net)
-python src/train_model.py
-
-# 3. Seed database with incidents, GeoIP coordinates, and MITRE IDs
-python backend/scripts/seed.py
+python src/data_pipeline.py     # synthesize 12,000 flow records
+python src/train_model.py       # benchmark the four classifiers
+python backend/scripts/seed.py  # seed incidents, GeoIP and MITRE IDs
 ```
 
-### 4. Running the Platform
+**3. Run the backend.**
 
-#### Terminal 1 — Backend (FastAPI with WebSockets)
 ```bash
 python -m uvicorn backend.app.main:app --port 8000 --reload
 ```
-*API Swagger Documentation is available at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).*
 
-#### Terminal 2 — Frontend (React + Vite)
+Interactive API docs are served at `http://127.0.0.1:8000/docs`.
+
+**4. Run the frontend.**
+
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-*Access the SOC Dashboard at [http://localhost:5173/](http://localhost:5173/).*
+
+Open `http://localhost:5173`.
 
 ---
 
-## 🎯 Viva & Evaluator Presentation Workflows
+## Demo Walkthrough
 
-### 1. Web UI Drag-and-Drop PCAP Analysis (The Evaluator Showstopper)
-1. Navigate to **Alerts** or **Logs** in the dashboard.
-2. Click **"Ingest PCAP Capture"** in the top right.
-3. Drop any `.pcap` capture file into the modal, or click **"Analyze Demonstration PCAP (1-Click)"**.
-4. Watch the flow parser extract conversational flows and display classified attacks with MITRE technique codes live on screen.
+1. **Analyze a capture.** Open Alerts, choose *Ingest PCAP Capture*, then drop a `.pcap` file or use the one-click demonstration capture. Classified flows appear with MITRE codes.
+2. **Investigate a threat.** Open any incident. Use *Calculate SHAP* for the feature waterfall, *PDF Report* for the incident document and *Firewall Rules* for copy-ready `netsh`, `iptables` and Suricata rules.
+3. **Compare models.** Open the Models page for the benchmark table.
+4. **Stream live traffic.** Run `python src/live_sniffer.py --count 10` and watch alerts arrive through the WebSocket connection.
 
-### 2. Explainable AI (SHAP Waterfall) & PDF Export
-1. Click on any threat incident in the dashboard.
-2. Inside the **Threat Investigation Drawer**:
-   - Click **"Calculate SHAP"** under the **Explainable AI** section to show the exact mathematical features pushing the prediction towards attack (red) or benign (green).
-   - Click **"PDF Report"** in the header to download a formal, multi-page SOC Incident Report.
-   - Click **"Firewall Rules"** to view and copy generated Windows `netsh`, Linux `iptables`, and Suricata IDS rules.
+---
 
-### 3. Multi-Model Thesis Comparison
-1. Navigate to **Models (AI)** in the sidebar.
-2. Review the **Multi-Model Comparative Benchmark** table comparing Random Forest, Hist Gradient Boosting, MLP Neural Network, and Logistic Regression on accuracy, F1, latency ($\mu$s), and training time.
+## Roadmap
 
-### 4. Live Hardware Sniffing
-Open a terminal and run the live hardware interface sniffer:
-```bash
-python src/live_sniffer.py --count 10
-```
-Watch the live alert banner appear automatically in the top header via the WebSocket push connection!
+- Evaluate on the original CIC-IDS2017 capture and report results on the official held-out days.
+- Add unit tests for the PCAP parser and the inference pipeline.
+- Add per-class precision and recall to the Models page.
+- Persist containment actions with an audit trail.
+
+---
+
+## Author
+
+**Nartan Maruti Naik**
+[GitHub](https://github.com/NartanNaik) | [LinkedIn](https://www.linkedin.com/in/nartan-naik-90499a359/) | naiknartana@gmail.com
