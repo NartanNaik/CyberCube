@@ -12,7 +12,8 @@ import {
   ChevronLeft,
   ChevronRight,
   RotateCcw,
-  BookOpen
+  BookOpen,
+  Download
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -24,6 +25,7 @@ import Settings from './pages/Settings';
 import OnboardingPage from './pages/OnboardingPage';
 import LoginModal from './components/LoginModal';
 import SplashScreen, { CyberCubeLogo } from './components/SplashScreen';
+import SetupWizard from './components/SetupWizard';
 import Tour from './components/Tour';
 import { isSetupComplete } from './utils/setupState';
 
@@ -51,7 +53,8 @@ const TOUR_STEPS = [
   { id: 'models',    title: 'Models (AI)',       text: 'Classifier metrics, confusion matrix and benchmarks.',       ref: tourRef('nav-models') },
   { id: 'settings',  title: 'Settings',          text: 'IPS auto-containment, thresholds and API URL.',              ref: tourRef('nav-settings') },
   { id: 'reset',     title: 'Reset Statistics',  text: 'Restarts the live data stream and refreshes the pages.',     ref: tourRef('reset-stats') },
-  { id: 'guide',     title: 'Setup Guide',       text: 'Replay this tour any time from here.',                       ref: tourRef('setup-guide') },
+  { id: 'setup',     title: 'Setup Guide',       text: 'Re-open the sensor download and install instructions any time.', ref: tourRef('setup-guide') },
+  { id: 'guide',     title: 'Replay Tour',       text: 'Replay this tour any time from here.',                       ref: tourRef('replay-tour') },
 ];
 
 // Inline SVGs for brand icons to bypass Lucide's removal of trademarked logos
@@ -80,10 +83,11 @@ function App() {
   const [toast, setToast] = useState(null); // { text, tone: 'alert' | 'info' }
   const [streamKey, setStreamKey] = useState(0); // bumping this reconnects the WebSocket
   
-  // Splash Screen, Sidebar, Tour and Reset states
+  // Splash Screen, Sidebar, Tour, Setup Guide and Reset states
   const [isAppLoading, setIsAppLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isTourOpen, setIsTourOpen] = useState(false);
+  const [isSetupGuideOpen, setIsSetupGuideOpen] = useState(false); // re-opens the sensor install wizard
   const [isResetting, setIsResetting] = useState(false);
 
   const toastTimer = useRef(null);
@@ -140,6 +144,22 @@ function App() {
   const closeTour = useCallback(() => {
     setIsTourOpen(false);
     try { localStorage.setItem(getTourKey(), '1'); } catch (e) { /* storage unavailable */ }
+  }, []);
+
+  // Open the sensor setup wizard (closes the tour first so the two never overlap).
+  const openSetupGuide = useCallback(() => {
+    setIsTourOpen(false);
+    setIsSetupGuideOpen(true);
+  }, []);
+
+  const closeSetupGuide = useCallback(() => {
+    setIsSetupGuideOpen(false);
+  }, []);
+
+  // Replay the guided tour (closes the setup wizard first).
+  const openTour = useCallback(() => {
+    setIsSetupGuideOpen(false);
+    setIsTourOpen(true);
   }, []);
 
   // When a tour step targets a sidebar item, make sure the sidebar is expanded.
@@ -280,9 +300,14 @@ function App() {
   return (
     <div className="flex h-screen bg-slate-950 overflow-hidden text-slate-100 font-sans relative">
 
-      {/* Guided tour (FIX: only mounted while open, and always given its steps) */}
+      {/* Guided tour (only mounted while open, and always given its steps) */}
       {isTourOpen && (
         <Tour steps={TOUR_STEPS} onClose={closeTour} onStepChange={handleTourStepChange} />
+      )}
+
+      {/* Sensor setup guide: re-opens the agent download / install wizard */}
+      {isSetupGuideOpen && (
+        <SetupWizard onClose={closeSetupGuide} />
       )}
 
       {/* Collapsible Sidebar */}
@@ -362,15 +387,28 @@ function App() {
               </span>
             </button>
 
+            {/* Re-opens the sensor install wizard */}
             <button
               type="button"
               data-tour="setup-guide"
-              onClick={() => setIsTourOpen(true)}
-              title={!isSidebarOpen ? 'Show Setup Guide' : 'Replay the guided tour'}
+              onClick={openSetupGuide}
+              title={!isSidebarOpen ? 'Show Setup Guide' : 'Download the sensor and get your install command'}
+              className={controlButtonClass}
+            >
+              <Download className="w-4 h-4 shrink-0" />
+              <span className={`whitespace-nowrap ${isSidebarOpen ? '' : 'hidden'}`}>Show Setup Guide</span>
+            </button>
+
+            {/* Replays the guided tour (previously labelled "Show Setup Guide") */}
+            <button
+              type="button"
+              data-tour="replay-tour"
+              onClick={openTour}
+              title={!isSidebarOpen ? 'Replay Tour' : 'Replay the guided tour'}
               className={controlButtonClass}
             >
               <BookOpen className="w-4 h-4 shrink-0" />
-              <span className={`whitespace-nowrap ${isSidebarOpen ? '' : 'hidden'}`}>Show Setup Guide</span>
+              <span className={`whitespace-nowrap ${isSidebarOpen ? '' : 'hidden'}`}>Replay Tour</span>
             </button>
           </div>
 

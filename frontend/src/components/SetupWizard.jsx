@@ -5,7 +5,8 @@ import {
   ShieldCheck,
   Copy,
   Download,
-  Terminal
+  Terminal,
+  X
 } from 'lucide-react';
 import { CyberCubeLogo } from './SplashScreen';
 import { markSetupComplete } from '../utils/setupState';
@@ -62,7 +63,16 @@ const CommandBlock = ({ label, value, copied, onCopy }) => (
   </div>
 );
 
-const SetupWizard = ({ onComplete }) => {
+/**
+ * Props:
+ *  - onComplete: called after first-time setup finishes (onboarding flow).
+ *  - onClose:    when provided, the wizard runs in "re-open" mode (opened from the
+ *                sidebar after setup is already done): it shows a close button,
+ *                closes on Escape / backdrop click, and skips the "Workspace Ready" screen.
+ */
+const SetupWizard = ({ onComplete, onClose }) => {
+  const isReopen = typeof onClose === 'function';
+
   // Grab the workspace key to inject into the terminal command
   const tenantKey = sessionStorage.getItem('soc_tenant_key') || 'soc_live_default_key';
   
@@ -70,8 +80,22 @@ const SetupWizard = ({ onComplete }) => {
   const [copiedField, setCopiedField] = useState(null);
   const [isFinishing, setIsFinishing] = useState(false);
   const copyTimer = useRef(null);
+  const finishTimer = useRef(null);
 
-  useEffect(() => () => clearTimeout(copyTimer.current), []);
+  useEffect(() => () => {
+    clearTimeout(copyTimer.current);
+    clearTimeout(finishTimer.current);
+  }, []);
+
+  // Re-open mode: close on Escape
+  useEffect(() => {
+    if (!isReopen) return;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isReopen, onClose]);
 
   const copyText = (value, field) => {
     try { navigator.clipboard.writeText(value); } catch (e) {}
@@ -81,11 +105,21 @@ const SetupWizard = ({ onComplete }) => {
   };
 
   const handleFinish = () => {
+    // Re-open mode: setup is already complete, so just dismiss.
+    if (isReopen) {
+      onClose();
+      return;
+    }
+
     setIsFinishing(true);
-    setTimeout(() => {
+    finishTimer.current = setTimeout(() => {
       markSetupComplete(); 
       if (typeof onComplete === 'function') onComplete();
     }, 1500);
+  };
+
+  const handleBackdropClick = (e) => {
+    if (isReopen && e.target === e.currentTarget) onClose();
   };
 
   const platform = SENSOR_PLATFORMS[sensorPlatform];
@@ -93,8 +127,16 @@ const SetupWizard = ({ onComplete }) => {
   const sensorCommand = platform.command(tenantKey);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-sm p-4">
-      <div className="relative w-full max-w-2xl max-h-[92vh] rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl flex flex-col overflow-hidden">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-sm p-4"
+      onMouseDown={handleBackdropClick}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Deploy Security Sensor"
+        className="relative w-full max-w-2xl max-h-[92vh] rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl flex flex-col overflow-hidden"
+      >
         
         {/* Header */}
         <div className="border-b border-slate-800 bg-slate-950/50 px-8 py-6 flex items-center justify-between shrink-0">
@@ -107,14 +149,28 @@ const SetupWizard = ({ onComplete }) => {
               <p className="text-xs text-slate-400 font-mono mt-1">Download and start your cross-platform agent</p>
             </div>
           </div>
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-xs font-semibold">
-            <ShieldCheck className="h-4 w-4" />
-            <span>Setup Phase</span>
+          <div className="flex items-center gap-3">
+            {!isReopen && (
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-xs font-semibold">
+                <ShieldCheck className="h-4 w-4" />
+                <span>Setup Phase</span>
+              </div>
+            )}
+            {isReopen && (
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close setup guide"
+                className="rounded-lg border border-slate-800 bg-slate-950/40 p-2 text-slate-400 transition-colors hover:border-slate-700 hover:text-emerald-400"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Success Overlay */}
-        {isFinishing && (
+        {/* Success Overlay (first-time setup only) */}
+        {isFinishing && !isReopen && (
           <div className="absolute inset-0 z-10 bg-slate-950/95 flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-200">
             <div className="h-20 w-20 rounded-full bg-emerald-500/10 flex items-center justify-center mb-6 border border-emerald-500/30">
               <CheckCircle2 className="h-10 w-10 text-emerald-500" />
@@ -197,15 +253,20 @@ const SetupWizard = ({ onComplete }) => {
 
         {/* Footer Actions */}
         <div className="border-t border-slate-800 bg-slate-950/50 p-6 flex justify-between items-center shrink-0">
-          <p className="text-xs text-slate-500 font-mono">You can always deploy more sensors later.</p>
+          <p className="text-xs text-slate-500 font-mono">
+            {isReopen
+              ? 'Run the same command on another machine to add more sensors.'
+              : 'You can always deploy more sensors later.'}
+          </p>
           
           <button
+            type="button"
             onClick={handleFinish}
             disabled={isFinishing}
             className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-600/50 text-white text-sm font-bold rounded-lg shadow-lg shadow-emerald-900/20 transition-all"
           >
-            <span>Finish setup</span>
-            <ChevronRight className="h-4 w-4" />
+            <span>{isReopen ? 'Close' : 'Finish setup'}</span>
+            {!isReopen && <ChevronRight className="h-4 w-4" />}
           </button>
         </div>
 
