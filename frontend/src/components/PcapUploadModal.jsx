@@ -283,7 +283,9 @@ const PcapUploadModal = ({ isOpen, onClose, onPcapProcessed }) => {
                           <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
                             t.severity === 'critical' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' :
                             t.severity === 'high' ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' :
-                            'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                            t.severity === 'medium' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                            t.severity === 'low' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                            'bg-slate-500/10 text-slate-400 border border-slate-500/20'
                           }`}>
                             {t.severity}
                           </span>

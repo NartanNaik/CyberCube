@@ -854,22 +854,36 @@ def get_containment_rules(
 async def health_check():
     return {"status": "ok", "message": "CyberCube backend is live"}
 
+# Built-in demo captures, selected by the ?level= query parameter.
+# Files live in <project root>/data/raw/
+DEMO_PCAP_FILES = {
+    "low": "low_threat.pcap",
+    "medium": "medium_threat.pcap",
+    "high": "high_threat.pcap",
+}
+
 # 14. POST /pcap/upload - PCAP ingestion with Tenant Binding & IPS Auto-Containment
 @app.post("/pcap/upload")
 async def upload_pcap(
     file: Optional[UploadFile] = File(None),
     demo: bool = Query(False, description="Analyze built-in demo PCAP sample"),
+    level: str = Query("medium", description="Demo threat level: low, medium or high"),
     tenant_key: str = Depends(get_tenant_key),
     db: Session = Depends(get_db)
 ):
+    # create_sample_pcap is still imported (no longer used by the demo path) so nothing is removed.
     from src.pcap_analyzer import parse_pcap, inspect_and_classify_flows, create_sample_pcap
 
     if demo or not file:
-        sample_path = os.path.join(PROJECT_ROOT, "data", "live_sample.pcap")
-        create_sample_pcap(sample_path)
+        level = level.strip().lower()
+        if level not in DEMO_PCAP_FILES:
+            raise HTTPException(status_code=400, detail="Invalid level. Use low, medium or high.")
+        sample_path = os.path.join(PROJECT_ROOT, "data", "raw", DEMO_PCAP_FILES[level])
+        if not os.path.exists(sample_path):
+            raise HTTPException(status_code=404, detail=f"Demo capture not found: {DEMO_PCAP_FILES[level]}")
         with open(sample_path, "rb") as f:
             content = f.read()
-        filename = "live_sample.pcap"
+        filename = DEMO_PCAP_FILES[level]
     else:
         content = await file.read()
         filename = file.filename
