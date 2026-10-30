@@ -2,10 +2,33 @@ import React, { useState, useRef } from 'react';
 import axios from 'axios';
 import { UploadCloud, FileText, CheckCircle2, AlertTriangle, X, ShieldAlert, Cpu, Sparkles, Play } from 'lucide-react';
 
+// Test payloads the backend can generate. `level` is sent as ?level=... alongside demo=true.
+const DEMO_LEVELS = [
+  {
+    level: 'low',
+    label: 'Low Threat PCAP',
+    idle: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20',
+    icon: 'text-emerald-400',
+  },
+  {
+    level: 'medium',
+    label: 'Medium Threat PCAP',
+    idle: 'border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20',
+    icon: 'text-amber-400',
+  },
+  {
+    level: 'high',
+    label: 'High Threat PCAP',
+    idle: 'border-rose-500/30 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20',
+    icon: 'text-rose-400',
+  },
+];
+
 const PcapUploadModal = ({ isOpen, onClose, onPcapProcessed }) => {
   const [dragActive, setDragActive] = useState(false);
   const [file, setFile] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [activeLevel, setActiveLevel] = useState(null); // which demo button is running: 'low' | 'medium' | 'high' | null
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
   const fileInputRef = useRef(null);
@@ -55,17 +78,30 @@ const PcapUploadModal = ({ isOpen, onClose, onPcapProcessed }) => {
     setFile(selectedFile);
   };
 
-  const runAnalysis = async (useDemo = false) => {
+  /**
+   * Runs an analysis.
+   *  - runAnalysis('low' | 'medium' | 'high') -> uploads a built-in demo PCAP of that threat level.
+   *  - runAnalysis()                          -> uploads the file the user selected.
+   */
+  const runAnalysis = async (threatLevel = null) => {
+    const isDemo = ['low', 'medium', 'high'].includes(threatLevel);
+    if (!isDemo && !file) return;
+
     setAnalyzing(true);
+    setActiveLevel(isDemo ? threatLevel : null);
     setError(null);
     setResults(null);
 
     try {
       const headers = getAuthHeaders();
       let res;
-      
-      if (useDemo || !file) {
-        res = await axios.post(`${API_URL}/pcap/upload?demo=true`, {}, { headers });
+
+      if (isDemo) {
+        res = await axios.post(
+          `${API_URL}/pcap/upload`,
+          {},
+          { headers, params: { demo: true, level: threatLevel } }
+        );
       } else {
         const formData = new FormData();
         formData.append('file', file);
@@ -83,6 +119,7 @@ const PcapUploadModal = ({ isOpen, onClose, onPcapProcessed }) => {
       setError(err.response?.data?.detail || "Failed to process PCAP file. Please verify file format.");
     } finally {
       setAnalyzing(false);
+      setActiveLevel(null);
     }
   };
 
@@ -152,30 +189,46 @@ const PcapUploadModal = ({ isOpen, onClose, onPcapProcessed }) => {
             </div>
           </div>
 
-          {/* Quick Actions (Run Upload or Run Built-in Sample) */}
-          <div className="flex items-center justify-between gap-3 pt-1">
-            <button
-              type="button"
-              disabled={analyzing}
-              onClick={() => runAnalysis(true)}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-semibold border border-slate-700 transition-all cursor-pointer shadow"
-            >
-              <Play className="w-3.5 h-3.5 text-sky-400" />
-              <span>Analyze Demonstration PCAP (1-Click)</span>
-            </button>
+          {/* Demo PCAPs: one button per threat level */}
+          <div className="space-y-2 pt-1">
+            <p className="text-[11px] font-semibold text-slate-500">Or run a built-in test capture</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {DEMO_LEVELS.map(({ level, label, idle, icon }) => {
+                const isRunning = analyzing && activeLevel === level;
+                return (
+                  <button
+                    key={level}
+                    type="button"
+                    disabled={analyzing}
+                    onClick={() => runAnalysis(level)}
+                    className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border text-xs font-semibold transition-all cursor-pointer shadow disabled:cursor-not-allowed disabled:opacity-50 ${idle}`}
+                  >
+                    {isRunning ? (
+                      <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Play className={`w-3.5 h-3.5 ${icon}`} />
+                    )}
+                    <span>{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-            {file && (
+          {/* Classify the uploaded file */}
+          {file && (
+            <div className="flex justify-end">
               <button
                 type="button"
                 disabled={analyzing}
-                onClick={() => runAnalysis(false)}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold transition-all cursor-pointer shadow"
+                onClick={() => runAnalysis()}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold transition-all cursor-pointer shadow disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Cpu className="w-3.5 h-3.5" />
                 <span>Classify {file.name}</span>
               </button>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* Analyzing Spinner */}
           {analyzing && (
