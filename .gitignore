@@ -42,5 +42,4 @@ out/
 # OS files
 .DS_Store
 Thumbs.db
-data/
 npcap-1.89.exe
